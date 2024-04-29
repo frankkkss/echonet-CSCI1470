@@ -70,3 +70,6 @@ if __name__ == "__main__":
     # dyas_test_loss, dyas_test_acc = dyastole.evaluate(x= vids_test, y= labels_dyas_test, batch_size= 64, verbose= 2)
 
     print(f"Systole test loss and accuracy: {[sys_test_loss, sys_test_acc]}") #\n Dyastole test loss and accuracy: {[dyas_test_loss, dyas_test_acc]}")
+
+    systole.save('systole_frame_selector.h5')
+    dyastole.save('dyastole_frame_selector.h5')
