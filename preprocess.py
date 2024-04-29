@@ -185,27 +185,23 @@ def splits(args):
     val_idx = idx_shuf[n_train + 1:n_train + n_val_test]
     test_idx = idx_shuf[-n_val_test:]
 
-    # idx = tf.random.shuffle(range(n_tot))
-    # train_inputs = tf.gather(train_inputs, idx)
-    # train_labels = tf.gather(train_labels, idx)
-
     mask_train = masks[train_idx, :, :, :]
-    # mask_val = masks[val_idx, :, :, :]
+    mask_val = masks[val_idx, :, :, :]
     mask_test = masks[test_idx, :, :, :]
     ims_train = ims_segm[train_idx, :, :, :]
-    # ims_val = ims_segm[val_idx, :, :, :]
+    ims_val = ims_segm[val_idx, :, :, :]
     ims_test = ims_segm[test_idx, :, :, :]
-    vids_train = videos[train_idx, :, :, :]
-    # vids_val = videos[val_idx, :, :, :]
-    vids_test = videos[test_idx, :, :, :]
+    vids_train = videos[train_idx, :, :, :, :]
+    vids_val = videos[val_idx, :, :, :, :]
+    vids_test = videos[test_idx, :, :, :, :]
     labels_sys_train = systole_labels[train_idx, :]
-    # labels_sys_val = systole_labels[val_idx, :]
+    labels_sys_val = systole_labels[val_idx, :]
     labels_sys_test = systole_labels[test_idx, :]
     labels_dyas_train = dyastole_labels[train_idx, :]
-    # labels_dyas_val = dyastole_labels[val_idx, :]
+    labels_dyas_val = dyastole_labels[val_idx, :]
     labels_dyas_test = dyastole_labels[test_idx, :]
-    return mask_train, mask_test, ims_train, ims_test, vids_train, vids_test, labels_sys_train, labels_sys_test, labels_dyas_train, labels_dyas_test
+    return mask_train, mask_val, mask_test, ims_train, ims_val, ims_test, vids_train, vids_val, vids_test, labels_sys_train, labels_sys_val, labels_sys_test, labels_dyas_train, labels_dyas_val, labels_dyas_test
 
 if __name__ == "__main__":
     args = parseArguments()
-    mtr, mte, imtr, imte, vtr, vte, lstr, lste, ldtr, ldte = splits(args=args)
+    mtr, mv, mte, imtr, imv, imte, vtr, vv, vte, lstr, lav, lste, ldtr, ldv, ldte = splits(args=args)
