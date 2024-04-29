@@ -18,6 +18,8 @@ def parseArguments():
 if __name__ == "__main__":
     args = parseArguments()
 
+    mask_train, mask_val, mask_test, ims_train, ims_val, ims_test, vids_train, vids_val, vids_test, labels_sys_train, labels_sys_val, labels_sys_test, labels_dyas_train, labels_dyas_val, labels_dyas_test = splits(args)
+
     video_size = (112, 112, 128, 1)
     systole = FrameSelect(video_size)
     dyastole = FrameSelect(video_size)
@@ -39,7 +41,7 @@ if __name__ == "__main__":
     )
 
     ## Trainig the model
-    mask_train, mask_val, mask_test, ims_train, ims_val, ims_test, vids_train, vids_val, vids_test, labels_sys_train, labels_sys_val, labels_sys_test, labels_dyas_train, labels_dyas_val, labels_dyas_test = splits(args)
+    print('Start training')
 
     systole_history = systole.fit(x= vids_train, 
                                 y= labels_sys_train, 
@@ -50,21 +52,21 @@ if __name__ == "__main__":
                                 callbacks= [early_stopping], 
                                 verbose= 2)
 
-    dyastole_history = systole.fit(x= vids_train, 
-                                y= labels_dyas_train, 
-                                batch_size= 64, 
-                                epochs= 500, 
-                                validation_data=(vids_val, labels_dyas_val),
-                                validation_batch_size= 64, 
-                                callbacks= [early_stopping], 
-                                verbose= 2)
+    # dyastole_history = systole.fit(x= vids_train, 
+                                # y= labels_dyas_train, 
+                                # batch_size= 64, 
+                                # epochs= 500, 
+                                # validation_data=(vids_val, labels_dyas_val),
+                                # validation_batch_size= 64, 
+                                # callbacks= [early_stopping], 
+                                # verbose= 2)
 
-    print(f"Systole train and validation loss: {[systole_history.history['loss'], systole_history.history['val_loss']]} \t Systole train and validation accuracy: {[systole_history.history['accuracy'], systole_history.history['val_accuracy']]} \n",
-        f"dyastole train and validation loss: {[dyastole_history.history['loss'], dyastole_history.history['val_loss']]} \t dyastole train and validation accuracy: {[dyastole_history.history['accuracy'], dyastole_history.history['val_accuracy']]}",
-        f"Epochs systole and dyastole: {[len(systole_history.epochs), len(dyastole_history.epochs)]}")
+    print(f"Systole train and validation loss: {[systole_history.history['loss'], systole_history.history['val_loss']]} \t Systole train and validation accuracy: {[systole_history.history['accuracy'], systole_history.history['val_accuracy']]} \n")
+        # f"dyastole train and validation loss: {[dyastole_history.history['loss'], dyastole_history.history['val_loss']]} \t dyastole train and validation accuracy: {[dyastole_history.history['accuracy'], dyastole_history.history['val_accuracy']]}",
+        # f"Epochs systole and dyastole: {[len(systole_history.epochs), len(dyastole_history.epochs)]}")
 
     ## Test the model
     sys_test_loss, sys_test_acc = systole.evaluate(x= vids_test, y= labels_sys_test, batch_size= 64, verbose= 2)
-    dyas_test_loss, dyas_test_acc = dyastole.evaluate(x= vids_test, y= labels_dyas_test, batch_size= 64, verbose= 2)
+    # dyas_test_loss, dyas_test_acc = dyastole.evaluate(x= vids_test, y= labels_dyas_test, batch_size= 64, verbose= 2)
 
-    print(f"Systole test loss and accuracy: {[sys_test_loss, sys_test_acc]} \n Dyastole test loss and accuracy: {[dyas_test_loss, dyas_test_acc]}")
+    print(f"Systole test loss and accuracy: {[sys_test_loss, sys_test_acc]}") #\n Dyastole test loss and accuracy: {[dyas_test_loss, dyas_test_acc]}")

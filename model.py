@@ -31,9 +31,7 @@ class FrameSelect(Model):
         ])
 
         self.flatten_layer = Flatten()
-        self.dense_block = Sequential([Dense(256, activation= 'leaky_relu'),
-                                       Dropout(0.3),
-                                       Dense(input_size[2], activation= 'softmax')
+        self.dense_block = Sequential([Dense(input_size[2], activation= 'softmax')
                                        ])
 
     def call(self, videos):

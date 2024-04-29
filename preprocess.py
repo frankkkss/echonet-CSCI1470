@@ -154,7 +154,7 @@ def main_preprocess(args):
             while (i_vid.isOpened()) & (n_frame < 128):                                                                                             
                 ret, frame = i_vid.read()                                                                                                       # Getting frames of the vido one by one
                 if not ret:                                                                                                                     # ret is true for each frame, when hte video ends and there are no frames it is False
-                    print(f"Stream end. Exiting vid #{i}...")
+                    # print(f"Stream end. Exiting vid #{i}...")
                     vids_info.append([i, list_data['FileName'][i], 112, 112, list_data['NumberOfFrames'][i]])                                     # Saving information from each of the videos
                     break
                 if (list_data['FrameHeight'][i] != 112) & (list_data['FrameWidth'][i] != 112):                                                  # Setting the desired resolution to 112x112
@@ -165,7 +165,7 @@ def main_preprocess(args):
             i_vid.release()
             n_vid += 1
     
-    print(vids.shape)
+    # print(vids.shape)
     
     return vids, beats, masks, n_tot
 
