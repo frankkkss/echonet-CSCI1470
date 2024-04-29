@@ -6,6 +6,7 @@ import os
 import cv2 as cv
 import random
 import matplotlib.pyplot as plt
+import argparse
 
 def preprocess_Stanford_split(des_split='TRAIN', file_path = 'C:/Users/afran/Desktop/BROWN/CSCI_1470_Deep_Learning/Project/Datasets/EchoNet-Dynamic/EchoNet-Dynamic'):
 
@@ -30,7 +31,18 @@ def preprocess_Stanford_split(des_split='TRAIN', file_path = 'C:/Users/afran/Des
     
     # pil.Image.open().convert('L')
 
-# preprocess(des_split='VAL')
+
+def parseArguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--oscar", action="store_true")
+    # parser.add_argument("--load_weights", action="store_true")
+    # parser.add_argument("--batch_size", type=int, default=128)
+    # parser.add_argument("--num_epochs", type=int, default=10)
+    # parser.add_argument("--latent_size", type=int, default=15)
+    # parser.add_argument("--input_size", type=int, default=28 * 28)
+    # parser.add_argument("--learning_rate", type=float, default=1e-3)
+    args = parser.parse_args()
+    return args
 
 def fill_array(mask, X1o, X2o, Yo , X1t, X2t, Yt):
     if Yt > Yo:
@@ -40,119 +52,160 @@ def fill_array(mask, X1o, X2o, Yo , X1t, X2t, Yt):
             mask[int(np.round(X1o - left_slope*dy, 0)):int(np.round(X2o + right_slope*dy, 0)), Yo + (dy - 1):Yo + dy] = 1
     return mask
 
-def beat_detect_data(vids, vids_info, seg_data):
-    ims = []
-    labels = []
-    for patient in vids_info:
-        if patient[0] in seg_data.keys():
-            ims.append(vids[patient[0]])
-            labels.append((seg_data[patient[0]][0], seg_data[patient[0]][2]))
-    return ims, labels
+def create_labels_for_beat_detection(beats, masks, n_tot):
+    vec_systole = vec_dyastole = np.zeros(shape=[n_tot, 128])
+    for idx, pat in enumerate(beats):
+        # beats[pat]
+        m1 = masks[idx, :, :, 0]
+        m2 = masks[idx, :, :, 1]
+        if np.sum(m1) > np.sum(m2):
+            vec_dyastole[idx, beats[pat][0]] = 1
+            vec_systole[idx, beats[pat][1]] = 1
+        else:
+            vec_dyastole[idx, beats[pat][1]] = 1
+            vec_systole[idx, beats[pat][0]] = 1
 
-def seg_data_prep(vids, vids_info, seg_data):
-    images = []
-    seg = []
-    for patient in vids_info:
-        if patient[0] in seg_data.keys():
-            frame_1 = seg_data[patient[0]][0]
-            frame_2 = seg_data[patient[0]][2]
-            images.append(vids[patient[0]][frame_1])
-            images.append(vids[patient[0]][frame_2])
-            seg.append(seg_data[patient[0]][1])
-            seg.append(seg_data[patient[0]][3])
+    return vec_systole, vec_dyastole
 
-    return images, seg
+def extract_images_for_segment(beats, vids, masks, n_tot):
+    ims_for_masks = np.zeros(shape=[n_tot*2, 112, 112], dtype=np.uint8)
+    new_masks = np.zeros(shape=[n_tot*2, 112, 112], dtype=np.uint8)
+    for idx, pat in enumerate(beats):
+        # beats[pat]
+        new_masks[2*idx, :, :] = masks[idx, :, :, 0]
+        new_masks[2*idx + 1, :, :] = masks[idx, :, :, 1]
+        ims_for_masks[2*idx, :, :] = vids[idx, :, :, beats[pat][0]]
+        ims_for_masks[2*idx + 1, :, :] = vids[idx, :, :, beats[pat][1]]
+    return ims_for_masks, new_masks
 
+def main_preprocess(args):
+    if args.oscar:
+        file_path = '/oscar/scratch/afranco7/CSCI1470/Datasets/EchoNet-Dynamic/EchoNet-Dynamic'
+    else:
+        file_path = 'C:/Users/afran/Desktop/BROWN/CSCI_1470_Deep_Learning/Project/Datasets/EchoNet-Dynamic/EchoNet-Dynamic'
 
-def extract_from_files(file_path = 'C:/Users/afran/Desktop/BROWN/CSCI_1470_Deep_Learning/Project/Datasets/EchoNet-Dynamic/EchoNet-Dynamic'):
-    # Path to your dataset
     list_data = pd.read_csv(file_path + '/FileList.csv')                                                                                    # 
     vid_path = file_path + '/Videos/'
-
-    vids = {}
-    vids_info = []
+    seg_file = pd.read_csv(file_path + '/VolumeTracings.csv')                                                                               # Opening the labels file
 
     n = len(list_data['EF'])
-    for i in range(n):
-        i_vid = cv.VideoCapture(vid_path + list_data['FileName'][i] + '.avi')                                                               # Opening video
-        vids[list_data['FileName'][i]] = []                                                                                                 # Initializing dictionary
-        while i_vid.isOpened():                                                                                             
-            ret, frame = i_vid.read()                                                                                                       # Getting frames of the vido one by one
-            if not ret:                                                                                                                     # ret is true for each frame, when hte video ends and there are no frames it is False
-                print("Stream end. Exiting ...")
-                vids_info.append([list_data['FileName'][i], 112, 112, len(vids[list_data['FileName'][i]])])                                 # SSaving information from each of the videos
-                break
-            if (list_data['FrameHeight'][i] != 112) & (list_data['FrameWidth'][i] != 112):                                                  # Setting the desired resolution to 112x112
-                frame = cv.resize(frame, [112, 112], interpolation=cv.INTER_CUBIC)                                                            # Resizing the videos that are not in that rsolution
-            gray = cv.cvtColor(frame, cv.COLOR_RGB2GRAY)                                                                                    # Converting to grayscale
-            vids[list_data['FileName'][i]].append(gray)                                                                                     # Adding each frame to the dictionary
-            # cv.imshow('frame', gray)
-            # cv.waitKey(25)
-        i_vid.release()
-        # cv.destroyAllWindows()
 
+    bin = seg_file['Frame'] < 128                                                                                                          # Cropping videos at 128 frames, so every video which systole/ or dyastole frames are upwards are discarded
+    not_included_masks = {}                                                                                                                 # List of the videos tahta re going to be discarded
+    for b in range(len(seg_file['X1'])):
+        if (bin[b] == False) | (seg_file['FileName'][b][:-4] not in np.array(list_data['FileName'])):
+            not_included_masks[seg_file['FileName'][b][:-4]] = 0
+    n_tot = n - len(not_included_masks.keys()) + 1                                                                                    # 4 Accounts for the difference in the dataset (10030 in list_data but 10025 in seg_list)
 
-    seg_file = pd.read_csv(file_path + '/VolumeTracings.csv')                                                                               # Opening the labels file
-    seg_data = {}
+    masks = np.zeros([n_tot, 112, 112, 2])
+    n_frame_in_vid = None
 
     prev_img = None
     prev_frame = None
     n_file = 0
+    beats = {}
+
     for ii in range(len(seg_file['X1'])):
-        if prev_img != None:
-            prev_Mx = Mx
-            prev_mx = mx
-            prev_y = My
-        Mx = np.max(np.array([int(np.round(seg_file['X1'][ii],0)), int(np.round(seg_file['X2'][ii],0))]))
-        mx = np.min(np.array([int(np.round(seg_file['X1'][ii],0)), int(np.round(seg_file['X2'][ii],0))]))
-        My = np.max(np.array([int(np.round(seg_file['Y1'][ii],0)), int(np.round(seg_file['Y2'][ii],0))]))
-        my = np.min(np.array([int(np.round(seg_file['Y1'][ii],0)), int(np.round(seg_file['Y2'][ii],0))]))
-        if seg_file['FileName'][ii][:-4] == prev_img:
-            if seg_file['Frame'][ii] == prev_frame:
-                mask_n[my:My, mx:Mx] = 1
-                if prev_y <= my:
-                    mask_n = fill_array(mask_n, prev_mx, prev_Mx, prev_y, mx, Mx, my)
-            else:
-                if (list_data['FrameHeight'][n_file] != 112) & (list_data['FrameWidth'][n_file] != 112): 
-                    mask_n = cv.resize(mask_n, [112, 112], interpolation=cv.INTER_NEAREST)
-                seg_data[prev_img].append([prev_frame, mask_n])
-                mask_n = np.zeros([list_data['FrameHeight'][n_file], list_data['FrameWidth'][n_file]])
-                prev_frame = seg_file['Frame'][ii]
+        if seg_file['FileName'][ii][:-4] in not_included_masks.keys():
+            pass
         else:
             if prev_img != None:
-                if (list_data['FrameHeight'][n_file] != 112) & (list_data['FrameWidth'][n_file] != 112): 
-                    mask_n = cv.resize(mask_n, [112, 112], interpolation=cv.INTER_NEAREST)
-                n_file += 1
-            mask_n = np.zeros([list_data['FrameHeight'][n_file], list_data['FrameWidth'][n_file]])
-            prev_img = seg_file['FileName'][ii][:-4]
-            prev_frame = seg_file['Frame'][ii]
-            seg_data[prev_img] = []
-        
-# Optimal clip length: 70 frames
-    return n, vids, vids_info, seg_data        
+                prev_Mx = Mx
+                prev_mx = mx
+                prev_y = My
+            Mx = np.max(np.array([int(np.round(seg_file['X1'][ii],0)), int(np.round(seg_file['X2'][ii],0))]))
+            mx = np.min(np.array([int(np.round(seg_file['X1'][ii],0)), int(np.round(seg_file['X2'][ii],0))]))
+            My = np.max(np.array([int(np.round(seg_file['Y1'][ii],0)), int(np.round(seg_file['Y2'][ii],0))]))
+            my = np.min(np.array([int(np.round(seg_file['Y1'][ii],0)), int(np.round(seg_file['Y2'][ii],0))]))
+            if seg_file['FileName'][ii][:-4] == prev_img:
+                if seg_file['Frame'][ii] == prev_frame:
+                    mask_n[my:My, mx:Mx] = 1
+                    if prev_y <= my:
+                        mask_n = fill_array(mask_n, prev_mx, prev_Mx, prev_y, mx, Mx, my)
+                else:
+                    if (list_data['FrameHeight'][list_data[list_data['FileName'] == seg_file['FileName'][ii][:-4]].index[0]] != 112) & (list_data['FrameWidth'][list_data[list_data['FileName'] == seg_file['FileName'][ii][:-4]].index[0]] != 112): 
+                        mask_n = cv.resize(mask_n, [112, 112], interpolation=cv.INTER_NEAREST)
+                    masks[n_file, :, :, n_frame_in_vid] = mask_n
+                    mask_n = np.zeros([list_data['FrameHeight'][list_data[list_data['FileName'] == seg_file['FileName'][ii][:-4]].index[0]], list_data['FrameWidth'][list_data[list_data['FileName'] == seg_file['FileName'][ii][:-4]].index[0]]])
+                    prev_frame = seg_file['Frame'][ii]
+                    beats[seg_file['FileName'][ii][:-4]].append(seg_file['Frame'][ii])
+                    n_frame_in_vid = 1
+            else:
+                if prev_img != None:
+                    if (list_data['FrameHeight'][list_data[list_data['FileName'] == seg_file['FileName'][ii][:-4]].index[0]] != 112) & (list_data['FrameWidth'][list_data[list_data['FileName'] == seg_file['FileName'][ii][:-4]].index[0]] != 112): 
+                        mask_n = cv.resize(mask_n, [112, 112], interpolation=cv.INTER_NEAREST)
+                    masks[n_file, :, :, n_frame_in_vid] = mask_n
+                    n_file += 1
+                mask_n = np.zeros([list_data['FrameHeight'][list_data[list_data['FileName'] == seg_file['FileName'][ii][:-4]].index[0]], list_data['FrameWidth'][list_data[list_data['FileName'] == seg_file['FileName'][ii][:-4]].index[0]]])
+                prev_img = seg_file['FileName'][ii][:-4]
+                prev_frame = seg_file['Frame'][ii]
+                beats[seg_file['FileName'][ii][:-4]] = [seg_file['Frame'][ii]]
+                n_frame_in_vid = 0
 
+    vids_info = []
+    vids = np.zeros(shape=[n_tot, 112, 112, 128], dtype=np.uint8)
+    n_vid = 0
+    for i in range(n):
+        if list_data['FileName'][i] in not_included_masks.keys():
+            pass
+        else:
+            i_vid = cv.VideoCapture(vid_path + list_data['FileName'][i] + '.avi')                                                               # Opening video                                                                                               # Initializing dictionary
+            n_frame = 0
+            while (i_vid.isOpened()) & (n_frame < 128):                                                                                             
+                ret, frame = i_vid.read()                                                                                                       # Getting frames of the vido one by one
+                if not ret:                                                                                                                     # ret is true for each frame, when hte video ends and there are no frames it is False
+                    print(f"Stream end. Exiting vid #{i}...")
+                    vids_info.append([i, list_data['FileName'][i], 112, 112, list_data['NumberOfFrames'][i]])                                     # Saving information from each of the videos
+                    break
+                if (list_data['FrameHeight'][i] != 112) & (list_data['FrameWidth'][i] != 112):                                                  # Setting the desired resolution to 112x112
+                    frame = cv.resize(frame, [112, 112], interpolation=cv.INTER_CUBIC)                                                            # Resizing the videos that are not in that rsolution
+                gray = cv.cvtColor(frame, cv.COLOR_RGB2GRAY)                                                                                    # Converting to grayscale
+                vids[n_vid, :, :, n_frame] = gray
+                n_frame += 1
+            i_vid.release()
+            n_vid += 1
+    
+    print(vids.shape)
+    
+    return vids, beats, masks, n_tot
 
-n, videos, videos_info, segmentation_data = extract_from_files()
+def splits(args):
+    videos, beats, masks, n_tot = main_preprocess(args)
+    systole_labels, dyastole_labels = create_labels_for_beat_detection(beats=beats, masks=masks, n_tot=n_tot)
+    ims_segm, masks = extract_images_for_segment(beats=beats, vids=videos, masks=masks,n_tot=n_tot)
+    videos = np.expand_dims(videos, axis=-1)
+    masks = np.expand_dims(masks, axis=-1)
+    ims_segm = np.expand_dims(ims_segm, axis=-1)
+    print(f"Shape of vids {videos.shape}\nShape of masks {masks.shape}\nShape of ims {ims_segm.shape}\nShape of labels {systole_labels.shape}")
+    
+    idx_shuf = tf.random.shuffle(range(n_tot))
+    n_train = int(round(n_tot*0.75, 0))
+    n_val_test = int(round(n_tot*0.125, 0))
+    train_idx = idx_shuf[:n_train]
+    val_idx = idx_shuf[n_train + 1:n_train + n_val_test]
+    test_idx = idx_shuf[-n_val_test:]
 
-idx_shuf = random.shuffle(range(n))
-n_train = n*0.75
-n_val_test = n*0.125
-train_idx = idx_shuf[:n_train]
-val_idx = idx_shuf[n_train + 1:n_train + n_val_test]
-test_idx = idx_shuf[-n_val_test:]
+    # idx = tf.random.shuffle(range(n_tot))
+    # train_inputs = tf.gather(train_inputs, idx)
+    # train_labels = tf.gather(train_labels, idx)
 
-img_point, seg = seg_data_prep(vids=videos, vids_info=videos_info, seg_data=segmentation_data)
-echo_vids, beats_labels = beat_detect_data(vids=videos, vids_info=videos_info, seg_data=segmentation_data)
+    mask_train = masks[train_idx, :, :, :]
+    # mask_val = masks[val_idx, :, :, :]
+    mask_test = masks[test_idx, :, :, :]
+    ims_train = ims_segm[train_idx, :, :, :]
+    # ims_val = ims_segm[val_idx, :, :, :]
+    ims_test = ims_segm[test_idx, :, :, :]
+    vids_train = videos[train_idx, :, :, :]
+    # vids_val = videos[val_idx, :, :, :]
+    vids_test = videos[test_idx, :, :, :]
+    labels_sys_train = systole_labels[train_idx, :]
+    # labels_sys_val = systole_labels[val_idx, :]
+    labels_sys_test = systole_labels[test_idx, :]
+    labels_dyas_train = dyastole_labels[train_idx, :]
+    # labels_dyas_val = dyastole_labels[val_idx, :]
+    labels_dyas_test = dyastole_labels[test_idx, :]
+    return mask_train, mask_test, ims_train, ims_test, vids_train, vids_test, labels_sys_train, labels_sys_test, labels_dyas_train, labels_dyas_test
 
-images_train = img_point[train_idx]
-images_val = img_point[val_idx]
-images_test = img_point[test_idx]
-masks_train = seg[train_idx]
-masks_val = seg[val_idx]
-masks_test = seg[test_idx]
-vids_train = echo_vids[train_idx]
-vids_val = echo_vids[val_idx]
-vids_test = echo_vids[test_idx]
-labels_train = beats_labels[train_idx]
-labels_val = beats_labels[val_idx]
-labels_test = beats_labels[test_idx]
+if __name__ == "__main__":
+    args = parseArguments()
+    mtr, mte, imtr, imte, vtr, vte, lstr, lste, ldtr, ldte = splits(args=args)
