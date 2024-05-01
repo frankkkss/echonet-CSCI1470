@@ -2,6 +2,7 @@ from model import FrameSelect, Unet
 import tensorflow as tf
 import argparse
 from preprocess import splits 
+tf.compat.v1.enable_eager_execution()
 
 def parseArguments():
     parser = argparse.ArgumentParser()
@@ -36,7 +37,7 @@ if __name__ == "__main__":
 
     early_stopping = tf.keras.callbacks.EarlyStopping(
         monitor='val_loss',  # La métrica a monitorizar
-        patience=3,  # Cuántas épocas sin mejora antes de detener
+        patience= 7,  # Cuántas épocas sin mejora antes de detener
         restore_best_weights=True,  # Restaura los mejores pesos encontrados durante el entrenamiento
     )
 
@@ -47,29 +48,26 @@ if __name__ == "__main__":
                                 y= labels_sys_train, 
                                 batch_size= 64, 
                                 epochs= 500, 
-                                validation_data=(vids_val, labels_sys_val),
-                                validation_batch_size= 64,  
+                                validation_data=(vids_val, labels_sys_val), 
                                 callbacks= [early_stopping], 
-                                verbose= 2)
+                                verbose= 1)
 
-    # dyastole_history = systole.fit(x= vids_train, 
-                                # y= labels_dyas_train, 
-                                # batch_size= 64, 
-                                # epochs= 500, 
-                                # validation_data=(vids_val, labels_dyas_val),
-                                # validation_batch_size= 64, 
-                                # callbacks= [early_stopping], 
-                                # verbose= 2)
+    dyastole_history = systole.fit(x= vids_train, 
+                                y= labels_dyas_train, 
+                                batch_size= 64, 
+                                epochs= 500, 
+                                validation_data=(vids_val, labels_dyas_val),
+                                callbacks= [early_stopping], 
+                                verbose= 1)
 
-    print(f"Systole train and validation loss: {[systole_history.history['loss'], systole_history.history['val_loss']]} \t Systole train and validation accuracy: {[systole_history.history['accuracy'], systole_history.history['val_accuracy']]} \n")
-        # f"dyastole train and validation loss: {[dyastole_history.history['loss'], dyastole_history.history['val_loss']]} \t dyastole train and validation accuracy: {[dyastole_history.history['accuracy'], dyastole_history.history['val_accuracy']]}",
-        # f"Epochs systole and dyastole: {[len(systole_history.epochs), len(dyastole_history.epochs)]}")
+    print(f"Systole train and validation loss: {[systole_history.history['loss'], systole_history.history['val_loss']]}",
+        f"dyastole train and validation loss: {[dyastole_history.history['loss'], dyastole_history.history['val_loss']]}")
 
     ## Test the model
     sys_test_loss, sys_test_acc = systole.evaluate(x= vids_test, y= labels_sys_test, batch_size= 64, verbose= 2)
-    # dyas_test_loss, dyas_test_acc = dyastole.evaluate(x= vids_test, y= labels_dyas_test, batch_size= 64, verbose= 2)
+    dyas_test_loss, dyas_test_acc = dyastole.evaluate(x= vids_test, y= labels_dyas_test, batch_size= 64, verbose= 2)
 
-    print(f"Systole test loss and accuracy: {[sys_test_loss, sys_test_acc]}") #\n Dyastole test loss and accuracy: {[dyas_test_loss, dyas_test_acc]}")
+    print(f"Systole test loss and accuracy: {[sys_test_loss, sys_test_acc]}\n Dyastole test loss and accuracy: {[dyas_test_loss, dyas_test_acc]}")
 
     systole.save('systole_frame_selector.h5')
     dyastole.save('dyastole_frame_selector.h5')
