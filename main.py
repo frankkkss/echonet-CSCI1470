@@ -1,4 +1,5 @@
 from model import FrameSelect, Unet
+from eval import *
 import tensorflow as tf
 import argparse
 from preprocess import splits 
@@ -21,6 +22,8 @@ if __name__ == "__main__":
 
     mask_train, mask_val, mask_test, ims_train, ims_val, ims_test, vids_train, vids_val, vids_test, labels_sys_train, labels_sys_val, labels_sys_test, labels_dyas_train, labels_dyas_val, labels_dyas_test = splits(args)
 
+    ### Frame Selection
+
     video_size = (112, 112, 128, 1)
     systole = FrameSelect(video_size)
     dyastole = FrameSelect(video_size)
@@ -37,12 +40,12 @@ if __name__ == "__main__":
 
     early_stopping = tf.keras.callbacks.EarlyStopping(
         monitor='val_loss',  # La métrica a monitorizar
-        patience= 7,  # Cuántas épocas sin mejora antes de detener
+        patience= 10,  # Cuántas épocas sin mejora antes de detener
         restore_best_weights=True,  # Restaura los mejores pesos encontrados durante el entrenamiento
     )
 
-    ## Trainig the model
-    print('Start training')
+    ## Train the model
+    print('Start training Systole')
 
     systole_history = systole.fit(x= vids_train, 
                                 y= labels_sys_train, 
@@ -51,6 +54,8 @@ if __name__ == "__main__":
                                 validation_data=(vids_val, labels_sys_val), 
                                 callbacks= [early_stopping], 
                                 verbose= 1)
+    
+    print('Start training Dyastole')
 
     dyastole_history = systole.fit(x= vids_train, 
                                 y= labels_dyas_train, 
@@ -64,10 +69,45 @@ if __name__ == "__main__":
         f"dyastole train and validation loss: {[dyastole_history.history['loss'], dyastole_history.history['val_loss']]}")
 
     ## Test the model
-    sys_test_loss, sys_test_acc = systole.evaluate(x= vids_test, y= labels_sys_test, batch_size= 64, verbose= 2)
-    dyas_test_loss, dyas_test_acc = dyastole.evaluate(x= vids_test, y= labels_dyas_test, batch_size= 64, verbose= 2)
+
+    sys_test_loss, sys_test_acc = systole.evaluate(x= vids_test, y= labels_sys_test, batch_size= 64, verbose= 1)
+    dyas_test_loss, dyas_test_acc = dyastole.evaluate(x= vids_test, y= labels_dyas_test, batch_size= 64, verbose= 1)
 
     print(f"Systole test loss and accuracy: {[sys_test_loss, sys_test_acc]}\n Dyastole test loss and accuracy: {[dyas_test_loss, dyas_test_acc]}")
 
-    systole.save('systole_frame_selector.h5')
-    dyastole.save('dyastole_frame_selector.h5')
+    ## Save the model
+
+    tf.saved_model.save(systole, r'/models/Systole') 
+    tf.saved_model.save(dyastole, r'/models/Dyastole') 
+
+    ### U-Net
+
+    unet = Unet()
+
+    optimizer_unet = tf.keras.optimizers.Adam(learning_rate=0.001)
+    loss = dice_coef_loss
+
+    unet.compile(optimizer= optimizer_unet, loss= loss, metrics=['accuracy'])
+
+    ## Train the model
+    print('Start training Unet')
+
+    unet_history = unet.fit(x= ims_train, 
+                            y= mask_train, 
+                            batch_size= 64, 
+                            epochs= 500, 
+                            verbose= 1, 
+                            callbacks= [early_stopping],
+                            validation_data= (ims_val, mask_val))
+    
+    print(f"Unet train and validation loss: {[systole_history.history['loss'], systole_history.history['val_loss']]}")
+
+    ## Test the model
+
+    unet_test_loss, unet_test_acc= unet.evaluate(x= ims_test, y= mask_test, batch_size= 64, verbose= 1)
+
+    print(f"Unet test loss and accuracy: {[unet_test_loss, unet_test_acc]}")
+
+    ## Save the model
+
+    tf.saved_model.save(unet, r'/models/Unet')    

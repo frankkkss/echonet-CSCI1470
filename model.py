@@ -46,9 +46,8 @@ class FrameSelect(Model):
 
 
 class Unet(Model):
-    def __init__(self, input_size):
+    def __init__(self):
         super().__init__()
-        self.input_size = input_size
 
         self.conv_block1 = Sequential([Conv2D(32, 3, padding='SAME'),
                                        BatchNormalization(),
