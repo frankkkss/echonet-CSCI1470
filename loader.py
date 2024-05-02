@@ -8,7 +8,7 @@ mask_train, mask_val, mask_test, ims_train, ims_val, ims_test, vids_train, vids_
 
 # Load and make a prediction
 
-unet = tf.saved_model.load("D:/csci/Unet")
+unet = tf.saved_model.load('./Unet')
 
 predictions = unet.predict(ims_test[:3])
 
