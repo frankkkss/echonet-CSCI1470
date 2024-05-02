@@ -1,6 +1,6 @@
 import tensorflow as tf
 from keras import Sequential, Model
-from keras.layers import Dense, Conv3D, Conv2D, Conv1D, Conv2DTranspose, Dropout, Flatten, MaxPool3D, MaxPool2D, BatchNormalization, ReLU
+from keras.layers import Dense, Conv3D, Conv2D, Conv2DTranspose, Flatten, MaxPool3D, MaxPool2D, BatchNormalization, ReLU
 import numpy as np
 tf.compat.v1.enable_eager_execution()
 

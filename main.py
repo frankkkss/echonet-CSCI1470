@@ -100,7 +100,7 @@ if __name__ == "__main__":
                             callbacks= [early_stopping],
                             validation_data= (ims_val, mask_val))
     
-    print(f"Unet train and validation loss: {[systole_history.history['loss'], systole_history.history['val_loss']]}")
+    print(f"Unet train and validation loss: {[unet_history.history['loss'], unet_history.history['val_loss']]}")
 
     ## Test the model
 
