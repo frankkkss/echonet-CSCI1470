@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import argparse
 
 def preprocess_Stanford_split(des_split='TRAIN', file_path = 'C:/Users/afran/Desktop/BROWN/CSCI_1470_Deep_Learning/Project/Datasets/EchoNet-Dynamic/EchoNet-Dynamic'):
-
+    ## Function to distribute the database as selected by the owners
     des_split.upper()
     
     vid_path = file_path + '/Videos/'
@@ -45,6 +45,7 @@ def parseArguments():
     return args
 
 def fill_array(mask, X1o, X2o, Yo , X1t, X2t, Yt):
+    ## Function to fill spaces between rectangles given as labels
     if Yt > Yo:
         left_slope = (X1t - X1o)/(Yt - Yo)
         right_slope = (X2t - X2o)/(Yt - Yo)
@@ -53,7 +54,9 @@ def fill_array(mask, X1o, X2o, Yo , X1t, X2t, Yt):
     return mask
 
 def create_labels_for_beat_detection(beats, masks, n_tot):
+    ## Creates the binary encoded vectors for labeling the frames of the videos corresponding to EDV or ESV
     vec_systole = vec_dyastole = np.zeros(shape=[n_tot, 128])
+    be = np.zeros(shape=[n_tot, 2], dtype=int)
     for idx, pat in enumerate(beats):
         # beats[pat]
         m1 = masks[idx, :, :, 0]
@@ -61,15 +64,19 @@ def create_labels_for_beat_detection(beats, masks, n_tot):
         if np.sum(m1) > np.sum(m2):
             vec_dyastole[idx, beats[pat][0]] = 1
             vec_systole[idx, beats[pat][1]] = 1
+            be[idx, :] = np.array([beats[pat][1], beats[pat][0]])
         else:
             vec_dyastole[idx, beats[pat][1]] = 1
             vec_systole[idx, beats[pat][0]] = 1
+            be[idx, :] = np.array([beats[pat][0], beats[pat][1]])
 
-    return vec_systole, vec_dyastole
+    return vec_systole, vec_dyastole, be
 
 def extract_images_for_segment(beats, vids, masks, n_tot):
-    ims_for_masks = np.zeros(shape=[n_tot*2, 112, 112], dtype=np.uint8)
-    new_masks = np.zeros(shape=[n_tot*2, 112, 112], dtype=np.uint8)
+    ## Constructs the needed segmentation and corresponging images arrays fro inputs
+    ims_for_masks = np.zeros(shape=[n_tot*2, 112, 112], dtype=np.float16)
+    new_masks = np.zeros(shape=[n_tot*2, 112, 112], dtype=np.float16)
+    # idx_shuf = tf.random.shuffle(range(n_tot))
     for idx, pat in enumerate(beats):
         # beats[pat]
         new_masks[2*idx, :, :] = masks[idx, :, :, 0]
@@ -79,7 +86,7 @@ def extract_images_for_segment(beats, vids, masks, n_tot):
     return ims_for_masks, new_masks
 
 def main_preprocess(args):
-    if args.oscar:
+    if args.oscar == True:
         file_path = '/oscar/scratch/afranco7/CSCI1470/Datasets/EchoNet-Dynamic/EchoNet-Dynamic'
     else:
         file_path = 'C:/Users/afran/Desktop/BROWN/CSCI_1470_Deep_Learning/Project/Datasets/EchoNet-Dynamic/EchoNet-Dynamic'
@@ -95,7 +102,7 @@ def main_preprocess(args):
     for b in range(len(seg_file['X1'])):
         if (bin[b] == False) | (seg_file['FileName'][b][:-4] not in np.array(list_data['FileName'])):
             not_included_masks[seg_file['FileName'][b][:-4]] = 0
-    n_tot = n - len(not_included_masks.keys()) + 1                                                                                    # 4 Accounts for the difference in the dataset (10030 in list_data but 10025 in seg_list)
+    n_tot = n - len(not_included_masks.keys()) + 1                                                                                    
 
     masks = np.zeros([n_tot, 112, 112, 2])
     n_frame_in_vid = None
@@ -145,12 +152,14 @@ def main_preprocess(args):
     vids_info = []
     vids = np.zeros(shape=[n_tot, 112, 112, 128], dtype=np.uint8)
     n_vid = 0
+    EF = np.zeros([n_tot, 1])
     for i in range(n):
         if list_data['FileName'][i] in not_included_masks.keys():
             pass
         else:
             i_vid = cv.VideoCapture(vid_path + list_data['FileName'][i] + '.avi')                                                               # Opening video                                                                                               # Initializing dictionary
             n_frame = 0
+            EF[n_vid, 0] = list_data['EF'][i]
             while (i_vid.isOpened()) & (n_frame < 128):                                                                                             
                 ret, frame = i_vid.read()                                                                                                       # Getting frames of the vido one by one
                 if not ret:                                                                                                                     # ret is true for each frame, when hte video ends and there are no frames it is False
@@ -158,7 +167,7 @@ def main_preprocess(args):
                     vids_info.append([i, list_data['FileName'][i], 112, 112, list_data['NumberOfFrames'][i]])                                     # Saving information from each of the videos
                     break
                 if (list_data['FrameHeight'][i] != 112) & (list_data['FrameWidth'][i] != 112):                                                  # Setting the desired resolution to 112x112
-                    frame = cv.resize(frame, [112, 112], interpolation=cv.INTER_CUBIC)                                                            # Resizing the videos that are not in that rsolution
+                    frame = cv.resize(frame, (112, 112), interpolation=cv.INTER_CUBIC)                                                            # Resizing the videos that are not in that rsolution
                 gray = cv.cvtColor(frame, cv.COLOR_RGB2GRAY)                                                                                    # Converting to grayscale
                 vids[n_vid, :, :, n_frame] = gray
                 n_frame += 1
@@ -167,30 +176,25 @@ def main_preprocess(args):
     
     # print(vids.shape)
     
-    return vids, beats, masks, n_tot
+    return vids, beats, masks, EF, n_tot
 
 def splits(args):
-    videos, beats, masks, n_tot = main_preprocess(args)
-    systole_labels, dyastole_labels = create_labels_for_beat_detection(beats=beats, masks=masks, n_tot=n_tot)
+    videos, beats, masks, EF, n_tot = main_preprocess(args)
+    systole_labels, dyastole_labels, beat_pos = create_labels_for_beat_detection(beats=beats, masks=masks, n_tot=n_tot)
     ims_segm, masks = extract_images_for_segment(beats=beats, vids=videos, masks=masks,n_tot=n_tot)
     videos = np.expand_dims(videos, axis=-1)
     masks = np.expand_dims(masks, axis=-1)
     ims_segm = np.expand_dims(ims_segm, axis=-1)
-    print(f"Shape of vids {videos.shape}\nShape of masks {masks.shape}\nShape of ims {ims_segm.shape}\nShape of labels {systole_labels.shape}")
+    # print(f"Shape of vids {videos.shape}\nShape of masks {masks.shape}\nShape of ims {ims_segm.shape}\nShape of labels {systole_labels.shape}")
     
-    idx_shuf = tf.random.shuffle(range(n_tot))
-    n_train = int(round(n_tot*0.75, 0))
-    n_val_test = int(round(n_tot*0.125, 0))
-    train_idx = idx_shuf[:n_train]
-    val_idx = idx_shuf[n_train + 1:n_train + n_val_test]
-    test_idx = idx_shuf[-n_val_test:]
+    # idx_shuf = tf.random.shuffle(range(n_tot))
+    idx_list = range(n_tot)
+    n_train = int(round(n_tot*0.8, 0))
+    n_val_test = int(round(n_tot*0.1, 0))
+    train_idx = idx_list[:n_train]
+    val_idx = idx_list[n_train + 1:n_train + n_val_test]
+    test_idx = idx_list[-n_val_test:]
 
-    mask_train = masks[train_idx, :, :, :]
-    mask_val = masks[val_idx, :, :, :]
-    mask_test = masks[test_idx, :, :, :]
-    ims_train = ims_segm[train_idx, :, :, :]
-    ims_val = ims_segm[val_idx, :, :, :]
-    ims_test = ims_segm[test_idx, :, :, :]
     vids_train = videos[train_idx, :, :, :, :]
     vids_val = videos[val_idx, :, :, :, :]
     vids_test = videos[test_idx, :, :, :, :]
@@ -200,8 +204,29 @@ def splits(args):
     labels_dyas_train = dyastole_labels[train_idx, :]
     labels_dyas_val = dyastole_labels[val_idx, :]
     labels_dyas_test = dyastole_labels[test_idx, :]
-    return mask_train, mask_val, mask_test, ims_train, ims_val, ims_test, vids_train, vids_val, vids_test, labels_sys_train, labels_sys_val, labels_sys_test, labels_dyas_train, labels_dyas_val, labels_dyas_test
+    beat_pos_test = beat_pos[test_idx, :]
+
+    EF_test = EF[test_idx]
+
+    # idx_shuf = tf.random.shuffle(range(n_tot*2))
+    n_train = int(round(n_tot*2*0.8, 0))
+    n_val_test = int(round(n_tot*2*0.1, 0))
+    idx_list = range(n_tot*2)
+    train_idx = idx_list[:n_train]
+    val_idx = idx_list[n_train + 1:n_train + n_val_test]
+    test_idx = idx_list[-n_val_test:]
+    
+    # EF_shuf = EF[shuf_masks]
+    # EF_test = EF_shuf[test_idx]
+
+    mask_train = masks[train_idx, :, :, :]
+    mask_val = masks[val_idx, :, :, :]
+    mask_test = masks[test_idx, :, :, :]
+    ims_train = ims_segm[train_idx, :, :, :]
+    ims_val = ims_segm[val_idx, :, :, :]
+    ims_test = ims_segm[test_idx, :, :, :]
+    return mask_train, mask_val, mask_test, ims_train, ims_val, ims_test, vids_train, vids_val, vids_test, labels_sys_train, labels_sys_val, labels_sys_test, labels_dyas_train, labels_dyas_val, labels_dyas_test, EF_test
 
 if __name__ == "__main__":
     args = parseArguments()
-    mtr, mv, mte, imtr, imv, imte, vtr, vv, vte, lstr, lav, lste, ldtr, ldv, ldte = splits(args=args)
+    mtr, mv, mte, imtr, imv, imte, vtr, vv, vte, lstr, lav, lste, ldtr, ldv, ldte, efte = splits(args=args)
