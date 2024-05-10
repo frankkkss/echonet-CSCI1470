@@ -181,7 +181,8 @@ if __name__ == "__main__":
 
         ## Test the model    
     elif args.unet == 'load':
-
+        
+        # Testing the loading of the model
         unet = tf.keras.models.load_model('models/Unet', custom_objects={'dice_coef_loss': dice_coef_loss})
 
         # Prediction of the segmentation by the U-Net for one of the videos
