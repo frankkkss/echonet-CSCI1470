@@ -10,6 +10,7 @@ import argparse
 
 def preprocess_Stanford_split(des_split='TRAIN', file_path = 'C:/Users/afran/Desktop/BROWN/CSCI_1470_Deep_Learning/Project/Datasets/EchoNet-Dynamic/EchoNet-Dynamic'):
     ## Function to distribute the database as selected by the owners
+    # Not used, as we decided to create and randomize our own splits
     des_split.upper()
     
     vid_path = file_path + '/Videos/'
@@ -35,18 +36,13 @@ def preprocess_Stanford_split(des_split='TRAIN', file_path = 'C:/Users/afran/Des
 def parseArguments():
     parser = argparse.ArgumentParser()
     parser.add_argument("--oscar", action="store_true")
-    # parser.add_argument("--load_weights", action="store_true")
-    # parser.add_argument("--batch_size", type=int, default=128)
-    # parser.add_argument("--num_epochs", type=int, default=10)
-    # parser.add_argument("--latent_size", type=int, default=15)
-    # parser.add_argument("--input_size", type=int, default=28 * 28)
-    # parser.add_argument("--learning_rate", type=float, default=1e-3)
     args = parser.parse_args()
     return args
 
 def fill_array(mask, X1o, X2o, Yo , X1t, X2t, Yt):
     ## Function to fill spaces between rectangles given as labels
     if Yt > Yo:
+        # Computing the slopes between vercites of contiguous rectangles to define the limits that need filling
         left_slope = (X1t - X1o)/(Yt - Yo)
         right_slope = (X2t - X2o)/(Yt - Yo)
         for dy in range(Yt - Yo):
@@ -56,11 +52,13 @@ def fill_array(mask, X1o, X2o, Yo , X1t, X2t, Yt):
 def create_labels_for_beat_detection(beats, masks, n_tot):
     ## Creates the binary encoded vectors for labeling the frames of the videos corresponding to EDV or ESV
     vec_systole = vec_dyastole = np.zeros(shape=[n_tot, 128])
-    be = np.zeros(shape=[n_tot, 2], dtype=int)
+    be = np.zeros(shape=[n_tot, 2], dtype=int)                                  # Vector to save tuple of systole and diastole frames, used for testing
     for idx, pat in enumerate(beats):
         # beats[pat]
         m1 = masks[idx, :, :, 0]
         m2 = masks[idx, :, :, 1]
+        # The area in the mask was checked as there was no other indication for distinguishing the frames
+        # Diastole is the relaxation of the heart, with muscle relaxed, the area of the ventricle is higher
         if np.sum(m1) > np.sum(m2):
             vec_dyastole[idx, beats[pat][0]] = 1
             vec_systole[idx, beats[pat][1]] = 1
@@ -73,12 +71,13 @@ def create_labels_for_beat_detection(beats, masks, n_tot):
     return vec_systole, vec_dyastole, be
 
 def extract_images_for_segment(beats, vids, masks, n_tot):
-    ## Constructs the needed segmentation and corresponging images arrays fro inputs
+    ## Constructs the needed segmentation and corresponging images arrays for inputs
     ims_for_masks = np.zeros(shape=[n_tot*2, 112, 112], dtype=np.float16)
     new_masks = np.zeros(shape=[n_tot*2, 112, 112], dtype=np.float16)
+    # Shuffle used to improve performance
     # idx_shuf = tf.random.shuffle(range(n_tot))
     for idx, pat in enumerate(beats):
-        # beats[pat]
+        # Despite shuffle, masks and images are saved in orderly manner by video to keep the systole-diastole relation, so testing is easier later
         new_masks[2*idx, :, :] = masks[idx, :, :, 0]
         new_masks[2*idx + 1, :, :] = masks[idx, :, :, 1]
         ims_for_masks[2*idx, :, :] = vids[idx, :, :, beats[pat][0]]
@@ -86,19 +85,25 @@ def extract_images_for_segment(beats, vids, masks, n_tot):
     return ims_for_masks, new_masks
 
 def main_preprocess(args):
+    ## Reading the provided files for the database and extracting the desired data
+
+    # As we made use of the computational power offered by CCv's oscar, the filepaths had to be changed 
     if args.oscar == True:
         file_path = '/oscar/scratch/afranco7/CSCI1470/Datasets/EchoNet-Dynamic/EchoNet-Dynamic'
     else:
         file_path = 'C:/Users/afran/Desktop/BROWN/CSCI_1470_Deep_Learning/Project/Datasets/EchoNet-Dynamic/EchoNet-Dynamic'
 
-    list_data = pd.read_csv(file_path + '/FileList.csv')                                                                                    # 
+    # opening the CSV files containing the information about the videos and the labels
+    list_data = pd.read_csv(file_path + '/FileList.csv') 
     vid_path = file_path + '/Videos/'
-    seg_file = pd.read_csv(file_path + '/VolumeTracings.csv')                                                                               # Opening the labels file
+    seg_file = pd.read_csv(file_path + '/VolumeTracings.csv')
 
     n = len(list_data['EF'])
 
-    bin = seg_file['Frame'] < 128                                                                                                          # Cropping videos at 128 frames, so every video which systole/ or dyastole frames are upwards are discarded
-    not_included_masks = {}                                                                                                                 # List of the videos tahta re going to be discarded
+    # Cropping videos at 128 frames, so every video which systole or dyastole frames are upwards are discarded
+    bin = seg_file['Frame'] < 128
+    not_included_masks = {}
+    # List of the videos taht are going to be discarded, formed by videos which important frames lie outside of the cutoff 128 frames and those which may appear in only one of the list files
     for b in range(len(seg_file['X1'])):
         if (bin[b] == False) | (seg_file['FileName'][b][:-4] not in np.array(list_data['FileName'])):
             not_included_masks[seg_file['FileName'][b][:-4]] = 0
@@ -112,6 +117,7 @@ def main_preprocess(args):
     n_file = 0
     beats = {}
 
+    # Iterating through each of the rows in the second CSV file, containing the segmentations for each selected frame
     for ii in range(len(seg_file['X1'])):
         if seg_file['FileName'][ii][:-4] in not_included_masks.keys():
             pass
