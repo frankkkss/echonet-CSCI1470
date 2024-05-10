@@ -13,7 +13,7 @@ class FrameSelect(Model):
         self.conv_block = Sequential([Conv3D(16, 3, padding= 'SAME'),
                                       BatchNormalization(),
                                       ReLU(),
-                                      MaxPool3D((2, 2, 2)), # Si se quiere no reducir el numero de frames agregar: strides= (2, 2, 1), padding= 'SAME'
+                                      MaxPool3D((2, 2, 2)),
 
                                       Conv3D(32, 3, padding= 'SAME'),
                                       BatchNormalization(),
@@ -25,7 +25,7 @@ class FrameSelect(Model):
                                       ReLU(),
                                       MaxPool3D((2, 2, 2)),
 
-                                      Conv3D(128, 3, padding= 'SAME'),  # Puede que reduzca las units
+                                      Conv3D(128, 3, padding= 'SAME'),
                                       BatchNormalization(),
                                       ReLU(),
                                       MaxPool3D((2, 2, 2))
@@ -48,7 +48,7 @@ class FrameSelect(Model):
 class Unet(Model):
     def __init__(self):
         super().__init__()
-
+        # Each conv_block + pool_ is a layer for the unet encoder
         self.conv_block1 = Sequential([Conv2D(32, 3, padding='SAME'),
                                        BatchNormalization(),
                                        ReLU(),
@@ -76,6 +76,7 @@ class Unet(Model):
          ])
         self.pool_3 = MaxPool2D((2, 2), strides= 2)
         
+        # Center of the Unet, this layer wont make any skip connections
         self.center = Sequential([Conv2D(256, 3, padding='SAME'),
                                   BatchNormalization(),
                                   ReLU(),
@@ -84,9 +85,10 @@ class Unet(Model):
                                   ReLU()
          ])
         
+        # Each decoder_conv_ + decoder_ is 1 layer for the unet decoder which recives the skip connection from the encoder from the same level
         self.decoder_3 = Conv2DTranspose(128, 2, strides=2)         
-        self.decoder_conv_3 = Sequential([Conv2D(128, 3, padding='SAME'),
-                                          BatchNormalization(),     # recives a concatenated input 
+        self.decoder_conv_3 = Sequential([Conv2D(128, 3, padding='SAME'), # recives a concatenated input from skip conection
+                                          BatchNormalization(),     
                                           ReLU(),
                                           Conv2D(128, 3, padding='SAME'),
                                           BatchNormalization(),
@@ -95,7 +97,7 @@ class Unet(Model):
         
         self.decoder_2 = Conv2DTranspose(64, 2, strides=2)         
         self.decoder_conv_2 = Sequential([Conv2D(64, 3, padding='SAME'),
-                                          BatchNormalization(),     # recives a concatenated input 
+                                          BatchNormalization(),     
                                           ReLU(),
                                           Conv2D(64, 3, padding='SAME'),
                                           BatchNormalization(),
@@ -104,19 +106,20 @@ class Unet(Model):
         
         self.decoder_1 = Conv2DTranspose(32, 2, strides=2)         
         self.decoder_conv_1 = Sequential([Conv2D(32, 3, padding='SAME'),
-                                          BatchNormalization(),     # recives a concatenated input 
+                                          BatchNormalization(),
                                           ReLU(),
                                           Conv2D(32, 3, padding='SAME'),
                                           BatchNormalization(),
                                           ReLU()
          ])
         
+        # Last convolution to leave the output with the same dimensions as the input
         self.out = Conv2D(1, 1, activation= 'sigmoid')
         
         
     @tf.function
     def call(self, frames):
-        
+        # Encoder block
         encoder_1 = self.conv_block1(frames)
         x = self.pool_1(encoder_1)
         encoder_2 = self.conv_block2(x)
@@ -124,8 +127,10 @@ class Unet(Model):
         encoder_3 = self.conv_block3(x)
         x = self.pool_3(encoder_3)
 
+        # Center of the Unet
         x = self.center(x)
 
+        # Decoder block
         x = self.decoder_3(x)
         x = self.decoder_conv_3(tf.concat([x, encoder_3], axis= -1))
         x = self.decoder_2(x)
